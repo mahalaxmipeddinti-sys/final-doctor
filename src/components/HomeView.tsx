@@ -28,7 +28,8 @@ interface HomeViewProps {
   onSearch: (
     input: string,
     assembly: GenomeAssembly,
-    trioInput?: { child: TrioMemberInput; mother: TrioMemberInput; father: TrioMemberInput }
+    trioInput?: { child: TrioMemberInput; mother: TrioMemberInput; father: TrioMemberInput },
+    targetTab?: 'workbench' | 'matrix' | 'assays'
   ) => void;
   onNavigateTab: (tab: 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays') => void;
   isAnalyzing: boolean;
@@ -162,26 +163,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   };
 
-  const handleSingleSubmit = (e: React.FormEvent) => {
+  const handleSingleSubmit = (e: React.FormEvent, targetTab: 'workbench' | 'assays' = 'workbench') => {
     e.preventDefault();
     if (!singleInput.trim()) return;
-    onSearch(singleInput.trim(), assembly);
+    onSearch(singleInput.trim(), assembly, undefined, targetTab);
   };
 
-  const handleTrioSubmit = (e: React.FormEvent) => {
+  const handleTrioSubmit = (e: React.FormEvent, targetTab: 'workbench' | 'assays' = 'workbench') => {
     e.preventDefault();
     if (!childInput.variantInput.trim()) return;
-    onSearch(childInput.variantInput.trim(), assembly, {
-      child: childInput,
-      mother: motherInput,
-      father: fatherInput,
-    });
+    onSearch(
+      childInput.variantInput.trim(),
+      assembly,
+      {
+        child: childInput,
+        mother: motherInput,
+        father: fatherInput,
+      },
+      targetTab
+    );
   };
 
-  const handleSelectPreset = (preset: BenchmarkVariantPreset) => {
+  const handleSelectPreset = (preset: BenchmarkVariantPreset, targetTab: 'workbench' | 'assays' = 'workbench') => {
     setSingleInput(preset.clinvarId);
     setChildInput((prev) => ({ ...prev, variantInput: preset.clinvarId }));
-    onSearch(preset.clinvarId, assembly);
+    onSearch(preset.clinvarId, assembly, undefined, targetTab);
   };
 
   return (
@@ -278,8 +284,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
               assembly={assembly}
             />
 
-            {/* Submit Action */}
-            <div className="pt-2 flex items-center justify-end">
+            {/* Submit Actions */}
+            <div className="pt-2 flex flex-wrap items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={(e) => handleTrioSubmit(e, 'assays')}
+                disabled={isAnalyzing || !childInput.variantInput.trim()}
+                className="w-full sm:w-auto px-5 py-3 bg-teal-950/80 hover:bg-teal-900 border border-teal-700/80 disabled:opacity-50 text-teal-200 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
+                title="Simulate this Family Trio across all 9 assays in 2D and 3D"
+              >
+                <FlaskConical className="w-4 h-4 text-teal-400" />
+                <span>Test Trio in 2D/3D Lab</span>
+              </button>
+
               <button
                 type="submit"
                 disabled={isAnalyzing || !childInput.variantInput.trim()}
@@ -292,7 +309,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </form>
         ) : (
           /* Single Mode Form */
-          <div className="pt-2 max-w-2xl mx-auto">
+          <div className="pt-2 max-w-3xl mx-auto">
             <form
               onSubmit={handleSingleSubmit}
               className="bg-slate-900/90 border border-slate-800 hover:border-teal-500/40 focus-within:border-teal-500/60 rounded-2xl p-2.5 shadow-2xl backdrop-blur transition-all"
@@ -309,7 +326,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center gap-2 justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+                <div className="flex flex-wrap items-center gap-2 justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-800">
                   <select
                     value={assembly}
                     onChange={(e) => setAssembly(e.target.value as GenomeAssembly)}
@@ -318,6 +335,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <option value="GRCh38">GRCh38</option>
                     <option value="GRCh37">GRCh37</option>
                   </select>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleSingleSubmit(e, 'assays')}
+                    disabled={isAnalyzing || !singleInput.trim()}
+                    className="px-4 py-2.5 bg-teal-950/80 hover:bg-teal-900 border border-teal-700/80 disabled:opacity-50 text-teal-200 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shrink-0"
+                    title="Simulate this variant across all 9 assays in 2D & 3D"
+                  >
+                    <FlaskConical className="w-4 h-4 text-teal-400" />
+                    <span>Test in 2D/3D Lab</span>
+                  </button>
 
                   <button
                     type="submit"
@@ -337,7 +365,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {BENCHMARK_VARIANTS.slice(0, 5).map((preset) => (
                 <button
                   key={preset.id}
-                  onClick={() => handleSelectPreset(preset)}
+                  onClick={() => handleSelectPreset(preset, 'workbench')}
                   className="px-2.5 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-teal-300 border border-slate-800 transition-colors flex items-center gap-1.5"
                 >
                   <span className="font-semibold text-teal-400">{preset.geneSymbol}</span>
@@ -384,7 +412,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           {/* Card 2: Diagnostic Assay Lab (2D & 3D) */}
           <div
-            onClick={() => onNavigateTab('assays')}
+            onClick={() => {
+              const currentInput =
+                analysisMode === 'trio'
+                  ? childInput.variantInput.trim() || singleInput.trim() || '17661'
+                  : singleInput.trim() || '17661';
+              onSearch(
+                currentInput,
+                assembly,
+                analysisMode === 'trio'
+                  ? { child: childInput, mother: motherInput, father: fatherInput }
+                  : undefined,
+                'assays'
+              );
+            }}
             className="group cursor-pointer bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-teal-500/40 rounded-xl p-5 transition-all shadow-sm flex flex-col justify-between"
           >
             <div className="space-y-3">

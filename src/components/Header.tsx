@@ -7,13 +7,15 @@ import {
   User as UserIcon,
   ChevronRight,
   Sparkles,
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
-import { auth, googleAuthProvider } from '../lib/firebase.ts';
-import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { subscribeToAuth, logoutUser, AppUser } from '../lib/authService.ts';
+import { AuthModal } from './AuthModal.tsx';
 
 interface HeaderProps {
-  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays';
-  setActiveTab: (tab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays') => void;
+  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account';
+  setActiveTab: (tab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account') => void;
   analysisCount?: number;
   onNewAnalysis?: () => void;
   onToggleSidebar: () => void;
@@ -28,6 +30,7 @@ const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
   compare: { title: 'Compare Variants', subtitle: 'Differential Matrix' },
   history: { title: 'Audit History', subtitle: 'Database Archive' },
   methodology: { title: 'Methodology', subtitle: 'Guidelines & Bayes' },
+  account: { title: 'User Account Portal', subtitle: 'Supabase Authentication & Profile Settings' },
 };
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,32 +41,23 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSidebar,
   isSidebarCollapsed = false,
 }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = subscribeToAuth((currentUser) => {
       setUser(currentUser);
     });
     return () => unsubscribe();
   }, []);
 
-  const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleAuthProvider);
-    } catch (err) {
-      console.error('Google Sign-In error:', err);
-    }
-  };
-
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error('Sign-Out error:', err);
-    }
+    await logoutUser();
+    setUser(null);
   };
 
   const currentInfo = TAB_TITLES[activeTab] || { title: 'Console', subtitle: '' };
+
 
   return (
     <header className="border-b border-slate-800/90 bg-slate-950/85 sticky top-0 z-20 backdrop-blur-md">
@@ -127,37 +121,62 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             {user ? (
-              <div className="flex items-center gap-2">
+              <div
+                onClick={() => setActiveTab('account')}
+                className="flex items-center gap-2 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-1 cursor-pointer transition-colors"
+                title="View Profile & Credentials"
+              >
                 {user.photoURL ? (
                   <img
                     src={user.photoURL}
                     alt="User avatar"
-                    className="w-7 h-7 rounded-full border border-slate-700 object-cover"
+                    className="w-6 h-6 rounded-full border border-teal-500/50 object-cover"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
+                  <div className="w-6 h-6 rounded-full bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300">
                     <UserIcon className="w-3.5 h-3.5" />
                   </div>
                 )}
+                <div className="hidden lg:flex flex-col text-left pr-1">
+                  <span className="text-[11px] font-semibold text-slate-200 truncate max-w-[140px]">
+                    {user.displayName || 'Clinician'}
+                  </span>
+                  <span className="text-[9px] text-teal-400 font-mono">
+                    {user.role || 'Clinical Geneticist'}
+                  </span>
+                </div>
                 <button
-                  onClick={handleLogout}
-                  className="text-xs text-slate-400 hover:text-slate-200 px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors whitespace-nowrap shrink-0 hidden md:block"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLogout();
+                  }}
+                  title="Sign Out"
+                  className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
                 >
-                  Sign Out
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
               <button
-                onClick={handleLogin}
-                className="text-xs text-slate-300 hover:text-white px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors whitespace-nowrap shrink-0"
+                onClick={() => setActiveTab('account')}
+                className="text-xs text-slate-200 hover:text-white px-3 py-1.5 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/40 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
               >
-                Sign In
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+                <span>Sign In / Register</span>
               </button>
             )}
+
           </div>
         </div>
       </div>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={(loggedUser) => setUser(loggedUser)}
+      />
     </header>
   );
 };
+

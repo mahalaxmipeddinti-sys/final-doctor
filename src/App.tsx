@@ -22,6 +22,7 @@ import { BENCHMARK_VARIANTS, BenchmarkVariantPreset } from './services/benchmark
 import { TrioPedigreeCard } from './components/TrioPedigreeCard.tsx';
 import { TrioInputSection } from './components/TrioInputSection.tsx';
 import { ClinicalAssayWorkbench } from './components/assays/ClinicalAssayWorkbench.tsx';
+import { authService, AppUser } from './services/auth.service.ts';
 import {
   Search,
   ArrowRight,
@@ -39,6 +40,8 @@ import {
   Activity,
 } from 'lucide-react';
 
+import { LoginAccountView } from './components/LoginAccountView.tsx';
+
 interface StepItem {
   label: string;
   subtext: string;
@@ -46,7 +49,9 @@ interface StepItem {
 }
 
 export default function App() {
-  const [activeNavTab, setActiveNavTab] = useState<'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays'>('home');
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [activeNavTab, setActiveNavTab] = useState<'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account'>('account');
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [variantInput, setVariantInput] = useState<string>('17661'); // Default: BRCA1 founder
@@ -99,9 +104,13 @@ export default function App() {
     { label: 'Synthesis', subtext: 'Conflict detection', status: 'pending' },
   ]);
 
-  // Initial data loading
+  // Initial data & auth session loading
   useEffect(() => {
     refreshHistory();
+    const unsubscribe = authService.onAuthStateChange((user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
   }, []);
 
   const refreshHistory = async () => {
@@ -121,7 +130,7 @@ export default function App() {
     inputStr: string,
     chosenAssembly: GenomeAssembly,
     overrides: Record<string, any> = {},
-    targetTab: 'workbench' | 'matrix' | 'assays' = 'workbench',
+    targetTab: 'home' | 'matrix' | 'assays' = 'assays',
     trioInput?: {
       child: TrioMemberInput;
       mother: TrioMemberInput;
@@ -131,7 +140,7 @@ export default function App() {
     if (!inputStr.trim()) return;
     setIsAnalyzing(true);
     setErrorMsg(null);
-    setActiveNavTab(targetTab);
+    setActiveNavTab(targetTab as any);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Reset progress steps
@@ -160,11 +169,12 @@ export default function App() {
         body: JSON.stringify({
           input: inputStr,
           assembly: chosenAssembly,
-          userId: 'local-session',
+          userId: currentUser?.uid || 'local-session',
           userOverrides: overrides,
           trioInput,
         }),
       });
+
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
@@ -230,7 +240,7 @@ export default function App() {
         wbChildInput.variantInput,
         assembly,
         {},
-        'workbench',
+        'assays',
         {
           child: wbChildInput,
           mother: wbMotherInput,
@@ -252,14 +262,14 @@ export default function App() {
     };
     setUserOverrides(updated);
     if (activeResult) {
-      runAnalysis(variantInput, assembly, updated, activeNavTab === 'matrix' ? 'matrix' : 'workbench');
+      runAnalysis(variantInput, assembly, updated, activeNavTab === 'matrix' ? 'matrix' : 'assays');
     }
   };
 
   const handleLoadFromHistory = (historicalItem: FullAnalysisResult) => {
     setActiveResult(historicalItem);
     setVariantInput(historicalItem.normalizedVariant.originalInput);
-    setActiveNavTab('workbench');
+    setActiveNavTab('assays');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -320,7 +330,7 @@ export default function App() {
           <HomeView
             onSearch={(input, chosenAssembly, trioInput) => {
               setAssembly(chosenAssembly);
-              runAnalysis(input, chosenAssembly, {}, 'workbench', trioInput);
+              runAnalysis(input, chosenAssembly, {}, 'assays', trioInput);
             }}
             onNavigateTab={(tab) => {
               setActiveNavTab(tab);
@@ -671,7 +681,7 @@ export default function App() {
                         childInput={wbChildInput}
                         motherInput={wbMotherInput}
                         fatherInput={wbFatherInput}
-                        onSelectVariant={(id) => runAnalysis(id, assembly, {}, 'workbench')}
+                        onSelectVariant={(id) => runAnalysis(id, assembly, {}, 'assays')}
                       />
                     )}
 
@@ -774,8 +784,15 @@ export default function App() {
           />
         )}
 
-        {/* NAV TAB 5: METHODOLOGY */}
-        {activeNavTab === 'methodology' && <MethodologyView />}
+        {/* NAV TAB 5: METHODOLOGY & TESTING GUIDE */}
+        {activeNavTab === 'methodology' && (
+          <MethodologyView
+            onSelectAssayForSimulation={(assayId) => {
+              setActiveNavTab('assays');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        )}
 
         {/* NAV TAB 6: DIAGNOSTIC ASSAY LAB (2D & 3D SIMULATOR) */}
         {activeNavTab === 'assays' && (
@@ -806,18 +823,6 @@ export default function App() {
                 )}
               </div>
 
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => {
-                    setActiveNavTab('workbench');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="text-xs text-teal-400 hover:text-teal-300 flex items-center space-x-1"
-                >
-                  <span>Open Clinical Workbench</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
 
             <ClinicalAssayWorkbench
@@ -830,7 +835,17 @@ export default function App() {
             />
           </div>
         )}
+
+        {/* NAV TAB 7: DETAILED USER LOGIN & ACCOUNT PORTAL */}
+        {activeNavTab === 'account' && (
+          <LoginAccountView
+            currentUser={currentUser}
+            onUserChange={(user) => setCurrentUser(user)}
+            onSelectVariant={(variantInputStr) => runAnalysis(variantInputStr, assembly, {}, 'assays')}
+          />
+        )}
       </main>
+
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-800/80 bg-slate-950/90 py-4 text-center text-[11px] text-slate-500 backdrop-blur">

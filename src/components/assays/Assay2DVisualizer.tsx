@@ -32,6 +32,8 @@ import {
   Crosshair,
   ShieldCheck,
 } from 'lucide-react';
+import { PartBubble } from './PartBubble.tsx';
+import { findPartExplanation, AssayPartExplanation } from '../../services/assayPartExplainerService.ts';
 
 interface Assay2DVisualizerProps {
   assayType: AssayType;
@@ -70,6 +72,7 @@ export const Assay2DVisualizer: React.FC<Assay2DVisualizerProps> = ({
 
   // Interactive Click State across all 9 assays
   const [selectedGelLane, setSelectedGelLane] = useState<string>('Patient');
+  const [bubble, setBubble] = useState<{ explanation: AssayPartExplanation; position: { x: number; y: number } } | null>(null);
   const [selectedPcrCycle, setSelectedPcrCycle] = useState<number>(22);
   const [selectedSangerCall, setSelectedSangerCall] = useState<any>(null);
   const [selectedNgsRead, setSelectedNgsRead] = useState<any>(null);
@@ -94,67 +97,66 @@ export const Assay2DVisualizer: React.FC<Assay2DVisualizerProps> = ({
 
   // Auto-initialize selected items based on active assay data
   useEffect(() => {
-    if (sangerData?.calls?.length && !selectedSangerCall) {
+    if (sangerData?.calls?.length) {
       const variantCall = sangerData.calls.find((c) => c.isVariantSite) || sangerData.calls[0];
       setSelectedSangerCall(variantCall);
     }
-  }, [sangerData, selectedSangerCall]);
+  }, [sangerData]);
 
   useEffect(() => {
-    if (ngsData?.reads?.length && !selectedNgsRead) {
+    if (ngsData?.reads?.length) {
       const mismatchRead = ngsData.reads.find((r) => r.hasMismatch) || ngsData.reads[0];
       setSelectedNgsRead(mismatchRead);
     }
-  }, [ngsData, selectedNgsRead]);
+  }, [ngsData]);
 
   useEffect(() => {
-    if (wesData?.exons?.length && !selectedWesExon) {
+    if (wesData?.exons?.length) {
       const variantExon = wesData.exons.find((e) => e.containsVariant) || wesData.exons[0];
       setSelectedWesExon(variantExon);
     }
-  }, [wesData, selectedWesExon]);
+  }, [wesData]);
 
   useEffect(() => {
-    if (wgsData?.svCalls?.length && !selectedWgsSv) {
+    if (wgsData?.svCalls?.length) {
       setSelectedWgsSv(wgsData.svCalls[0]);
     }
-  }, [wgsData, selectedWgsSv]);
+  }, [wgsData]);
 
   useEffect(() => {
-    if (microarrayData?.spots?.length && !selectedSpot) {
+    if (microarrayData?.spots?.length) {
       const match =
         microarrayData.spots.find((s) => s.gene === microarrayData.candidateGeneSymbol) ||
         microarrayData.spots[0];
       setSelectedSpot(match);
     }
-  }, [microarrayData, selectedSpot]);
+  }, [microarrayData]);
 
   useEffect(() => {
-    if (cmaData?.probes?.length && !selectedCmaProbe) {
+    if (cmaData?.probes?.length) {
       const abnormalProbe = cmaData.probes.find((p) => p.isAbnormal) || cmaData.probes[0];
       setSelectedCmaProbe(abnormalProbe);
     }
-  }, [cmaData, selectedCmaProbe]);
+  }, [cmaData]);
 
   useEffect(() => {
-    if (genotypingData?.clusterPoints?.length && !selectedGenotypingPoint) {
+    if (genotypingData?.clusterPoints?.length) {
       const patientPoint =
         genotypingData.clusterPoints.find((p) => p.sampleType === 'Patient Proband') ||
         genotypingData.clusterPoints[0];
       setSelectedGenotypingPoint(patientPoint);
     }
-  }, [genotypingData, selectedGenotypingPoint]);
+  }, [genotypingData]);
 
   useEffect(() => {
-    if (karyotypingData?.chromosomes?.length && !selectedChromosome) {
-      // Pick Chr 17 if present (BRCA1/TP53), else Chr 7 (CFTR/BRAF), else first
+    if (karyotypingData?.chromosomes?.length) {
+      const targetNum = karyotypingData.chromosomes.find((c) => c.hasStructuralAnomaly)?.number;
       const defaultChr =
-        karyotypingData.chromosomes.find((c) => c.number === '17') ||
-        karyotypingData.chromosomes.find((c) => c.number === '7') ||
+        karyotypingData.chromosomes.find((c) => c.number === targetNum) ||
         karyotypingData.chromosomes[0];
       setSelectedChromosome(defaultChr);
     }
-  }, [karyotypingData, selectedChromosome]);
+  }, [karyotypingData]);
 
   // Click Guidance Banner rendered atop any visualizer
   const renderClickBanner = (contextText: string) => (
@@ -168,6 +170,13 @@ export const Assay2DVisualizer: React.FC<Assay2DVisualizerProps> = ({
       </span>
     </div>
   );
+
+  const handlePartClick = (partId: string, e: React.MouseEvent) => {
+    const expl = findPartExplanation(partId, assayType);
+    if (expl) {
+      setBubble({ explanation: expl, position: { x: e.clientX, y: e.clientY } });
+    }
+  };
 
   // =========================================================================
   // 1. PCR 2D VISUALIZATION (Thermocycler + Agarose Gel + qPCR Curve)
@@ -1651,6 +1660,13 @@ export const Assay2DVisualizer: React.FC<Assay2DVisualizerProps> = ({
 
   return (
     <div className="space-y-4">
+      {bubble && (
+        <PartBubble
+          explanation={bubble.explanation}
+          position={bubble.position}
+          onClose={() => setBubble(null)}
+        />
+      )}
       {/* Assay-specific 2D renderer */}
       {assayType === 'pcr' && renderPcr2D()}
       {assayType === 'sanger' && renderSanger2D()}

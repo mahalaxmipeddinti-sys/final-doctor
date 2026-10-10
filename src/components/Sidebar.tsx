@@ -19,12 +19,11 @@ import {
   X,
   ExternalLink,
 } from 'lucide-react';
-import { auth, googleAuthProvider } from '../lib/firebase.ts';
-import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { subscribeToAuth, loginWithGoogleOrFallback, logoutUser, AppUser } from '../lib/authService.ts';
 
 export interface SidebarProps {
-  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays';
-  setActiveTab: (tab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays') => void;
+  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account';
+  setActiveTab: (tab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account') => void;
   analysisCount?: number;
   onNewAnalysis?: () => void;
   isCollapsed: boolean;
@@ -45,10 +44,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setIsMobileOpen,
   onSelectBenchmark,
 }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = subscribeToAuth((currentUser) => {
       setUser(currentUser);
     });
     return () => unsubscribe();
@@ -66,19 +66,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [setIsMobileOpen]);
 
   const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleAuthProvider);
-    } catch (err) {
-      console.error('Google Sign-In error:', err);
-    }
+    setActiveTab('account');
+    setIsMobileOpen(false);
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error('Sign-Out error:', err);
-    }
+    await logoutUser();
+    setUser(null);
   };
 
   const navItems = [
@@ -88,14 +82,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: 'Home',
       description: 'Search console & overview',
       icon: Home,
-      badge: null,
-    },
-    {
-      id: 'workbench' as const,
-      label: 'Clinical Workbench',
-      shortLabel: 'Workbench',
-      description: 'ClinVar, VEP & ML inference',
-      icon: Layers,
       badge: null,
     },
     {
@@ -138,6 +124,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: BookOpen,
       badge: null,
     },
+    {
+      id: 'account' as const,
+      label: 'Account & Login',
+      shortLabel: 'Account',
+      description: 'Supabase session & user profile',
+      icon: UserIcon,
+      badge: user ? 'Active' : 'Sign In',
+    },
   ];
 
   const benchmarkShortcuts = [
@@ -147,11 +141,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: '12374', gene: 'TP53', label: 'R175H' },
   ];
 
-  const handleNavClick = (tabId: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays') => {
+  const handleNavClick = (tabId: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account') => {
     setActiveTab(tabId);
     setIsMobileOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
 
   // Content shared between desktop sidebar and mobile drawer
   const renderSidebarContent = (collapsed: boolean, isMobile: boolean = false) => (

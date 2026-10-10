@@ -9,11 +9,15 @@ import { fetchClinVarRecord } from './src/services/clinvarClient.ts';
 import { annotateVariant } from './src/services/annotationService.ts';
 import { runMLPathogenicityInference } from './src/services/mlPredictor.ts';
 import { evaluateACMGGuidelines } from './src/services/acmgRulesEngine.ts';
+import { ACMG_CRITERIA_REGISTRY, ACMG_RULESET_VERSION } from './src/services/acmgRegistry.ts';
+import { generateACMGExplanation } from './src/services/acmgExplainer.ts';
+import { runAutomatedACMGTests } from './src/services/acmgTests.ts';
 import { executeVariantAnalysis } from './src/services/analysisPipeline.ts';
 import { generateMarkdownReport, generateJsonExport } from './src/services/reportGenerator.ts';
 import { getRecentAnalyses, getAnalysisById, deleteAnalysisById } from './src/db/analyses.ts';
 import { BENCHMARK_VARIANTS } from './src/services/benchmarkVariants.ts';
 import { extractVariantFromReportText } from './src/services/trioService.ts';
+import { adminAuth } from './src/lib/firebase-admin.ts';
 
 dotenv.config();
 
@@ -35,6 +39,30 @@ async function bootstrap() {
   app.use(express.json({ limit: '5mb' }));
 
   // --- API ENDPOINTS ---
+
+  // Firebase Auth custom token generator for seamless clinician session
+  app.post('/api/auth/demo-token', async (req: Request, res: Response) => {
+    try {
+      const customToken = await adminAuth.createCustomToken('guest-clinician-123', {
+        role: 'clinician',
+        displayName: 'Dr. Alex Vance (Clinical Geneticist)',
+      });
+      res.json({ token: customToken });
+    } catch (err: any) {
+      // Gracefully fall back to local clinician profile without returning HTTP 500 error
+      res.json({
+        token: null,
+        user: {
+          uid: 'guest-clinician-vance-01',
+          displayName: 'Dr. Alex Vance (Clinical Geneticist)',
+          email: 'alex.vance@genomics.hospital.org',
+          photoURL:
+            'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
+          isAnonymous: true,
+        },
+      });
+    }
+  });
 
   // Health check endpoint
   app.get('/api/health', (req: Request, res: Response) => {
@@ -229,7 +257,16 @@ Respond ONLY with valid JSON in this exact structure:
     }
   });
 
-  // 5. ACMG Guidelines Evaluation
+  // 5a. ACMG Guidelines Versioned Criteria Registry
+  app.get('/api/acmg/registry', (req: Request, res: Response) => {
+    res.json({
+      rulesetVersion: ACMG_RULESET_VERSION,
+      totalCriteria: Object.keys(ACMG_CRITERIA_REGISTRY).length,
+      registry: ACMG_CRITERIA_REGISTRY,
+    });
+  });
+
+  // 5b. ACMG Guidelines Evaluation
   app.post('/api/acmg/evaluate', (req: Request, res: Response) => {
     try {
       const { variant, annotation, clinvar, userOverrides } = req.body;
@@ -240,6 +277,30 @@ Respond ONLY with valid JSON in this exact structure:
       res.json(evaluation);
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'ACMG evaluation failed' });
+    }
+  });
+
+  // 5c. ACMG Detailed Step-by-Step Explainability & Discrepancy Generator
+  app.post('/api/acmg/explain', (req: Request, res: Response) => {
+    try {
+      const { analysisId = 'exp-01', variant, acmgResult, annotation, clinvar, mlPrediction } = req.body;
+      if (!variant || !acmgResult) {
+        return res.status(400).json({ error: 'Variant and acmgResult are required' });
+      }
+      const explanation = generateACMGExplanation(analysisId, variant, acmgResult, annotation, clinvar, mlPrediction);
+      res.json(explanation);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'ACMG explanation generation failed' });
+    }
+  });
+
+  // 5d. ACMG Automated Test Suite Runner
+  app.get('/api/acmg/run-tests', async (req: Request, res: Response) => {
+    try {
+      const report = await runAutomatedACMGTests();
+      res.json(report);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Automated test suite execution failed' });
     }
   });
 

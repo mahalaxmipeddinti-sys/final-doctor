@@ -2,6 +2,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { AssayType } from '../../types/assays.ts';
+import { NormalizedVariant } from '../../types/genomics.ts';
 import {
   RotateCcw,
   ZoomIn,
@@ -22,6 +23,9 @@ import {
   MousePointerClick,
   CheckCircle,
 } from 'lucide-react';
+import { AssayPartExplainerModal } from './AssayPartExplainerModal.tsx';
+import { PartBubble } from './PartBubble.tsx';
+import { findPartExplanation, AssayPartExplanation } from '../../services/assayPartExplainerService.ts';
 
 export interface Subsystem3DComponent {
   id: string;
@@ -456,6 +460,7 @@ interface Assay3DVisualizerProps {
   assayType: AssayType;
   targetGene?: string;
   variantInput?: string;
+  currentVariant?: NormalizedVariant;
   isPlaying: boolean;
   speed: number;
 }
@@ -464,6 +469,7 @@ export const Assay3DVisualizer: React.FC<Assay3DVisualizerProps> = ({
   assayType,
   targetGene = 'BRCA1',
   variantInput = 'c.5266dupC',
+  currentVariant,
   isPlaying,
   speed,
 }) => {
@@ -479,6 +485,9 @@ export const Assay3DVisualizer: React.FC<Assay3DVisualizerProps> = ({
 
   // Interactive 3D Component Inspection State
   const [selectedComponent, setSelectedComponent] = useState<Subsystem3DComponent | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [bubble, setBubble] = useState<{ explanation: AssayPartExplanation; position: { x: number; y: number } } | null>(null);
+  const [activePart, setActivePart] = useState<AssayPartExplanation | null>(null);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
 
   // Auto-initialize selected component when assay type changes
@@ -1386,10 +1395,15 @@ export const Assay3DVisualizer: React.FC<Assay3DVisualizerProps> = ({
         if (hits.length > 0) {
           // Cycle to next component or pick first
           const comps = ASSAY_3D_COMPONENTS[assayType] || [];
-          setSelectedComponent((prev) => {
-            const nextIdx = prev ? (comps.findIndex((c) => c.id === prev.id) + 1) % comps.length : 0;
-            return comps[nextIdx] || comps[0];
-          });
+          const nextIdx = selectedComponent ? (comps.findIndex((c) => c.id === selectedComponent.id) + 1) % comps.length : 0;
+          const nextComp = comps[nextIdx] || comps[0];
+          setSelectedComponent(nextComp);
+          
+          // Trigger Bubble
+          const expl = findPartExplanation(nextComp.id, assayType);
+          if (expl) {
+            setBubble({ explanation: expl, position: { x: e.clientX, y: e.clientY } });
+          }
         }
       }
     };
@@ -1444,7 +1458,7 @@ export const Assay3DVisualizer: React.FC<Assay3DVisualizerProps> = ({
       renderer.dispose();
       if (container) container.innerHTML = '';
     };
-  }, [assayType, isPlaying, speed, handleZoom, autoRotate]);
+  }, [assayType, targetGene, variantInput, currentVariant, isPlaying, speed, handleZoom, autoRotate]);
 
   return (
     <div
@@ -1458,13 +1472,12 @@ export const Assay3DVisualizer: React.FC<Assay3DVisualizerProps> = ({
       {/* Floating 3D Scientific HUD & Spec Banner (Top-Left) */}
       <div className="absolute top-3 left-3 bg-slate-900/85 backdrop-blur-md px-3.5 py-2 rounded-xl border border-slate-700/80 text-xs font-mono text-slate-200 flex items-center gap-2.5 shadow-lg">
         <Sparkles className="w-4 h-4 text-teal-400" />
-        <div>
-          <span className="font-extrabold text-teal-300 uppercase tracking-wide">{assayType}</span>
-          <span className="text-slate-500 mx-1.5">•</span>
-          <span className="text-slate-300 font-semibold">{targetGene}</span>
-          <span className="text-slate-500 mx-1.5">•</span>
-          <span className="text-teal-400 font-mono text-[11px]">{variantInput}</span>
-        </div>
+        <span className="font-bold text-teal-300 font-mono">
+          {targetGene || 'BRCA1'} • {variantInput || currentVariant?.hgvsc || 'c.5266dupC'}
+        </span>
+        <span className="text-[10px] text-slate-400 border-l border-slate-700 pl-2">
+          {selectedComponent?.name || 'Inspect 3D Spatial Model'}
+        </span>
       </div>
 
       {/* Clickable 3D Subsystem Component Chips (Top Strip) */}
@@ -1639,6 +1652,25 @@ export const Assay3DVisualizer: React.FC<Assay3DVisualizerProps> = ({
           {assayType === 'karyotyping' && 'Metaphase Sister Chromatids • Giemsa G-Banding'}
         </span>
       </div>
+      {bubble && (
+        <PartBubble
+          explanation={bubble.explanation}
+          position={bubble.position}
+          onClose={() => setBubble(null)}
+        />
+      )}
+      <AssayPartExplainerModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        part={activePart}
+        assayType={assayType}
+        currentVariant={currentVariant}
+        onSelectPart={(p) => {
+          setActivePart(p);
+          const comp = ASSAY_3D_COMPONENTS[assayType].find((c) => c.id.includes(p.id.split('-')[1]));
+          if (comp) setSelectedComponent(comp);
+        }}
+      />
     </div>
   );
 };

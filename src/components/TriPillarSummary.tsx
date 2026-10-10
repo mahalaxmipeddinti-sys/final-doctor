@@ -1,13 +1,13 @@
 // src/components/TriPillarSummary.tsx
-import React from 'react';
-import { Database, Cpu, ShieldCheck, Star, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Database, Cpu, ShieldCheck, Star, ExternalLink, AlertTriangle, FileText } from 'lucide-react';
 import { FullAnalysisResult } from '../types/genomics.ts';
 
 interface TriPillarSummaryProps {
   result: FullAnalysisResult;
+  onOpenReport?: () => void;
 }
 
-export const TriPillarSummary: React.FC<TriPillarSummaryProps> = ({ result }) => {
+export const TriPillarSummary: React.FC<TriPillarSummaryProps> = ({ result, onOpenReport }) => {
   const { clinvarRecord: cv, mlPrediction: ml, acmgEvaluation: acmg } = result;
 
   // Helper for ClinVar color
@@ -45,7 +45,7 @@ export const TriPillarSummary: React.FC<TriPillarSummaryProps> = ({ result }) =>
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
         <div>
           <div className="flex items-center space-x-2">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200">
@@ -60,19 +60,32 @@ export const TriPillarSummary: React.FC<TriPillarSummaryProps> = ({ result }) =>
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 self-start sm:self-auto">
-          <span className="text-xs text-slate-400">Analysis Status:</span>
-          <span
-            className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider border ${
-              result.summaryStatus === 'COMPLETED'
-                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
-                : result.summaryStatus === 'CONFLICTS_DETECTED'
-                ? 'bg-amber-950/60 text-amber-300 border-amber-700/50'
-                : 'bg-slate-800 text-slate-300 border-slate-700'
-            }`}
-          >
-            {result.summaryStatus.replace('_', ' ')}
-          </span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {onOpenReport && (
+            <button
+              onClick={onOpenReport}
+              className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center space-x-1.5 transition-all shadow-md shadow-teal-900/40 cursor-pointer"
+              title="Open Official DNA Doctor 10-Page Clinical PDF Report"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Generate / Download Report (PDF)</span>
+            </button>
+          )}
+
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-slate-400">Status:</span>
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider border ${
+                result.summaryStatus === 'COMPLETED'
+                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                  : result.summaryStatus === 'CONFLICTS_DETECTED'
+                  ? 'bg-amber-950/60 text-amber-300 border-amber-700/50'
+                  : 'bg-slate-800 text-slate-300 border-slate-700'
+              }`}
+            >
+              {result.summaryStatus.replace('_', ' ')}
+            </span>
+          </div>
         </div>
       </div>
 

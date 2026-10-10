@@ -14,6 +14,7 @@ import { AnnotationTab } from './components/AnnotationTab.tsx';
 import { MLExplainabilityTab } from './components/MLExplainabilityTab.tsx';
 import { ACMGMatrixTab } from './components/ACMGMatrixTab.tsx';
 import { ReportTab } from './components/ReportTab.tsx';
+import { ReportModal } from './components/ReportModal.tsx';
 import { HistoryView } from './components/HistoryView.tsx';
 import { MethodologyView } from './components/MethodologyView.tsx';
 import { CompareVariantsView } from './components/CompareVariantsView.tsx';
@@ -69,6 +70,7 @@ export default function App() {
   const [recentAnalyses, setRecentAnalyses] = useState<FullAnalysisResult[]>([]);
   const [userOverrides, setUserOverrides] = useState<Record<string, any>>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showQuickPdfModal, setShowQuickPdfModal] = useState<boolean>(false);
 
   // Workbench Trio Mode State (Default Trio: Child, Mother, Father)
   const [workbenchInputMode, setWorkbenchInputMode] = useState<'single' | 'trio'>('trio');
@@ -581,18 +583,21 @@ export default function App() {
 
                     {/* Prominent Quick Report Button */}
                     <button
-                      onClick={() => setResultTab('report')}
-                      className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center space-x-1.5 transition-all shadow-md shadow-teal-900/50"
-                      title="Generate and download 10-page DNA Doctor PDF report"
+                      onClick={() => setShowQuickPdfModal(true)}
+                      className="px-4 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center space-x-1.5 transition-all shadow-md shadow-teal-900/50 cursor-pointer"
+                      title="Instant Open & Download 10-Page DNA Doctor PDF Report"
                     >
                       <FileText className="w-3.5 h-3.5 text-white" />
-                      <span>📄 Generate DNA Doctor Report (PDF)</span>
+                      <span>📄 View / Download DNA Doctor Report (PDF)</span>
                     </button>
                   </div>
                 </div>
 
                 {/* 1. Flagship Tri-Pillar Visual Banner */}
-                <TriPillarSummary result={activeResult} />
+                <TriPillarSummary
+                  result={activeResult}
+                  onOpenReport={() => setShowQuickPdfModal(true)}
+                />
 
                 {/* 2. Detected Conflicts / Dissonance Alert */}
                 <ConflictCard conflicts={activeResult.conflicts} />
@@ -927,6 +932,14 @@ export default function App() {
         )}
       </main>
 
+
+      {/* Global Quick PDF Report Modal */}
+      <ReportModal
+        analysis={activeResult}
+        currentUser={currentUser}
+        isOpen={showQuickPdfModal}
+        onClose={() => setShowQuickPdfModal(false)}
+      />
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-800/80 bg-slate-950/90 py-4 text-center text-[11px] text-slate-500 backdrop-blur">

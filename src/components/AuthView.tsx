@@ -252,6 +252,20 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setTimeout(() => setConfigSaveStatus(null), 1500);
   };
 
+  const handleDemoAccess = () => {
+    const demoClinician: AppUser = {
+      uid: 'demo-clinician-001',
+      id: 'demo-clinician-001',
+      displayName: displayName.trim() || (email ? email.split('@')[0] : 'Dr. Karthik (Lead Geneticist)'),
+      email: email.trim() || 'karthik@gmail.com',
+      photoURL: null,
+      role: role || 'Senior Clinical Geneticist',
+      institution: institution || 'Genomics Medical Center',
+      createdAt: new Date().toISOString(),
+    };
+    onAuthSuccess(demoClinician);
+  };
+
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background ambient lighting */}
@@ -423,6 +437,24 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   </>
                 )}
               </button>
+
+              <div className="relative my-3">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-800" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase font-semibold">
+                  <span className="bg-slate-900 px-2 text-slate-500">Or Demo Clinician Access</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDemoAccess}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-800/90 hover:bg-slate-800 text-teal-300 border border-teal-500/30 hover:border-teal-500/60 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
+              >
+                <Shield className="w-3.5 h-3.5 text-teal-400" />
+                <span>Instant Clinician Demo Login</span>
+              </button>
             </form>
           )}
 
@@ -565,6 +597,24 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
+              </button>
+
+              <div className="relative my-3">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-800" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase font-semibold">
+                  <span className="bg-slate-900 px-2 text-slate-500">Or Demo Clinician Access</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDemoAccess}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-800/90 hover:bg-slate-800 text-teal-300 border border-teal-500/30 hover:border-teal-500/60 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
+              >
+                <Shield className="w-3.5 h-3.5 text-teal-400" />
+                <span>Instant Clinician Demo Login</span>
               </button>
             </form>
           )}

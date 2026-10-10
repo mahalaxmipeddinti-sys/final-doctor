@@ -225,8 +225,18 @@ export function getSupabaseConfig(): {
   isPlaceholder: boolean;
   isConfigured: boolean;
 } {
-  const localUrl = typeof window !== 'undefined' ? localStorage.getItem('custom_supabase_url') : null;
-  const localKey = typeof window !== 'undefined' ? localStorage.getItem('custom_supabase_anon_key') : null;
+  let localUrl = typeof window !== 'undefined' ? localStorage.getItem('custom_supabase_url') : null;
+  let localKey = typeof window !== 'undefined' ? localStorage.getItem('custom_supabase_anon_key') : null;
+
+  // Clear obsolete or placeholder custom configs stored previously
+  if (localUrl && (localUrl.includes('placeholder') || !localUrl.startsWith('http'))) {
+    if (typeof window !== 'undefined') localStorage.removeItem('custom_supabase_url');
+    localUrl = null;
+  }
+  if (localKey && (localKey.includes('placeholder') || localKey.length < 10)) {
+    if (typeof window !== 'undefined') localStorage.removeItem('custom_supabase_anon_key');
+    localKey = null;
+  }
 
   const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.SUPABASE_URL) || '';
   const envKey = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_SUPABASE_ANON_KEY || import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY)) || (typeof process !== 'undefined' && (process.env?.VITE_SUPABASE_ANON_KEY || process.env?.SUPABASE_ANON_KEY || process.env?.SUPABASE_KEY)) || '';

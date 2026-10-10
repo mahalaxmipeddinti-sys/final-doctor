@@ -1,16 +1,18 @@
 // src/services/auth.service.ts
-import { supabase, Database } from '../lib/supabase.ts';
+import { supabase, Database, getSupabaseConfig } from '../lib/supabase.ts';
 import { User, Session } from '@supabase/supabase-js';
 
 export type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 
 export interface AppUser {
   uid: string;
+  id: string; // compatibility alias for uid
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
   role?: string;
-  isAnonymous?: boolean;
+  institution?: string;
+  createdAt?: string;
 }
 
 export interface AuthResponse<T = any> {
@@ -19,95 +21,76 @@ export interface AuthResponse<T = any> {
   success: boolean;
 }
 
-const LOCAL_GUEST_KEY = 'dna_doctor_supabase_user';
-
-export const DEFAULT_CLINICIAN: AppUser = {
-  uid: 'guest-clinician-vance-01',
-  displayName: 'Dr. Alex Vance (Clinical Geneticist)',
-  email: 'alex.vance@genomics.hospital.org',
-  photoURL: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
-  role: 'Clinical Geneticist',
-  isAnonymous: false,
-};
-
-export function getStoredGuestUser(): AppUser | null {
-  try {
-    const raw = localStorage.getItem(LOCAL_GUEST_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (err) {
-    console.error('Error reading stored user from storage:', err);
-  }
-  return null;
-}
-
-export function setStoredGuestUser(user: AppUser | null) {
-  try {
-    if (user) {
-      localStorage.setItem(LOCAL_GUEST_KEY, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(LOCAL_GUEST_KEY);
-    }
-  } catch (err) {
-    console.error('Error writing stored user to storage:', err);
-  }
-}
-
 /**
- * Map Supabase User to AppUser
+ * Map Supabase Auth User object to AppUser interface
  */
 export function mapSupabaseUserToAppUser(user: User): AppUser {
   return {
     uid: user.id,
+    id: user.id,
     displayName:
       user.user_metadata?.full_name ||
       user.user_metadata?.display_name ||
       user.user_metadata?.name ||
       user.email?.split('@')[0] ||
-      'Clinical User',
+      'Clinician',
     email: user.email || null,
     photoURL:
       user.user_metadata?.avatar_url ||
       user.user_metadata?.picture ||
-      DEFAULT_CLINICIAN.photoURL,
+      null,
     role: user.user_metadata?.role || 'Clinical Geneticist',
-    isAnonymous: false,
+    institution: user.user_metadata?.institution || 'Genomics Medical Center',
+    createdAt: user.created_at,
   };
 }
 
 class AuthService {
   /**
-   * Get active session
+   * Check if Supabase project is configured with valid non-placeholder credentials
+   */
+  isConfigured(): boolean {
+    return getSupabaseConfig().isConfigured;
+  }
+
+  /**
+   * Get active Supabase Auth session
    */
   async getSession(): Promise<Session | null> {
     try {
       const { data, error } = await supabase.auth.getSession();
       if (error) {
-        console.warn('Get session notice:', error.message);
+        console.warn('Session retrieval notice:', error.message);
         return null;
       }
       return data.session;
     } catch (err) {
-      console.warn('Session check exception:', err);
+      console.warn('Session verification exception:', err);
       return null;
     }
   }
 
   /**
-   * Get current authenticated user
+   * Get JWT access token for authenticating backend API requests
+   */
+  async getAccessToken(): Promise<string | null> {
+    const session = await this.getSession();
+    return session?.access_token || null;
+  }
+
+  /**
+   * Get current authenticated user (null if unauthenticated)
    */
   async getCurrentUser(): Promise<AppUser | null> {
     try {
       const session = await this.getSession();
       if (session?.user) {
-        const appUser = mapSupabaseUserToAppUser(session.user);
-        setStoredGuestUser(appUser);
-        return appUser;
+        return mapSupabaseUserToAppUser(session.user);
       }
     } catch (err) {
-      console.warn('Current user check exception:', err);
+      console.warn('Error fetching current user:', err);
     }
-
-    return getStoredGuestUser() || DEFAULT_CLINICIAN;
+    return null;
   }
 
   /**
@@ -117,17 +100,19 @@ class AuthService {
     email: string,
     password: string,
     displayName?: string,
-    role: string = 'Clinical Geneticist'
-  ): Promise<AuthResponse<{ user: AppUser | null; session: Session | null }>> {
+    role: string = 'Clinical Geneticist',
+    institution: string = 'Genomics Medical Center'
+  ): Promise<AuthResponse<{ user: AppUser | null; session: Session | null; emailConfirmationRequired: boolean }>> {
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
           data: {
-            full_name: displayName || email.split('@')[0],
-            display_name: displayName || email.split('@')[0],
+            full_name: displayName?.trim() || email.split('@')[0],
+            display_name: displayName?.trim() || email.split('@')[0],
             role,
+            institution,
           },
         },
       });
@@ -136,40 +121,38 @@ class AuthService {
         return { data: null, error: error.message, success: false };
       }
 
-      if (data.user) {
-        const appUser = mapSupabaseUserToAppUser(data.user);
-        setStoredGuestUser(appUser);
+      const emailConfirmationRequired = Boolean(data.user && !data.session);
+      const appUser = data.user ? mapSupabaseUserToAppUser(data.user) : null;
 
-        // Sync or create record in user_profiles table
+      // Sync user profile to database if session is immediate
+      if (data.user && data.session) {
         try {
           await (supabase.from('user_profiles' as any) as any).upsert({
             id: data.user.id,
             email: data.user.email,
-            display_name: appUser.displayName,
-            photo_url: appUser.photoURL,
+            display_name: appUser?.displayName,
+            photo_url: appUser?.photoURL,
             role,
             updated_at: new Date().toISOString(),
           });
-        } catch (dbErr) {
-          console.warn('Profile sync notice:', dbErr);
+        } catch (syncErr) {
+          console.warn('Initial profile sync warning:', syncErr);
         }
-
-        return {
-          data: { user: appUser, session: data.session },
-          error: null,
-          success: true,
-        };
       }
 
       return {
-        data: null,
-        error: 'Sign up succeeded. Please check your email for confirmation.',
+        data: {
+          user: appUser,
+          session: data.session,
+          emailConfirmationRequired,
+        },
+        error: null,
         success: true,
       };
     } catch (err: any) {
       return {
         data: null,
-        error: err.message || 'Failed to complete sign up.',
+        error: err.message || 'Failed to complete registration.',
         success: false,
       };
     }
@@ -184,7 +167,7 @@ class AuthService {
   ): Promise<AuthResponse<{ user: AppUser; session: Session }>> {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -193,12 +176,14 @@ class AuthService {
       }
 
       if (!data.user || !data.session) {
-        return { data: null, error: 'No session returned from Supabase.', success: false };
+        return {
+          data: null,
+          error: 'No active session received. Please verify your email if confirmation is enabled.',
+          success: false,
+        };
       }
 
       const appUser = mapSupabaseUserToAppUser(data.user);
-      setStoredGuestUser(appUser);
-
       return {
         data: { user: appUser, session: data.session },
         error: null,
@@ -207,31 +192,9 @@ class AuthService {
     } catch (err: any) {
       return {
         data: null,
-        error: err.message || 'Failed to sign in.',
+        error: err.message || 'Failed to sign in. Please check your credentials.',
         success: false,
       };
-    }
-  }
-
-  /**
-   * Sign In with Google OAuth
-   */
-  async signInWithGoogle(): Promise<AuthResponse<null>> {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
-
-      if (error) {
-        return { data: null, error: error.message, success: false };
-      }
-
-      return { data: null, error: null, success: true };
-    } catch (err: any) {
-      return { data: null, error: err.message || 'Google OAuth failed.', success: false };
     }
   }
 
@@ -240,8 +203,8 @@ class AuthService {
    */
   async resetPassword(email: string): Promise<AuthResponse<null>> {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/?tab=reset-password`,
       });
 
       if (error) {
@@ -259,7 +222,7 @@ class AuthService {
   }
 
   /**
-   * Update Password (e.g., after clicking password recovery link)
+   * Update Password (for recovery or profile update)
    */
   async updatePassword(newPassword: string): Promise<AuthResponse<null>> {
     try {
@@ -285,7 +248,6 @@ class AuthService {
    * Sign Out
    */
   async signOut(): Promise<void> {
-    setStoredGuestUser(null);
     try {
       await supabase.auth.signOut();
     } catch (err) {
@@ -296,16 +258,15 @@ class AuthService {
   /**
    * Subscribe to Auth State Changes
    */
-  onAuthStateChange(callback: (user: AppUser | null, session: Session | null) => void): () => void {
-    // Emit initial user immediately
-    const stored = getStoredGuestUser() || DEFAULT_CLINICIAN;
-    callback(stored, null);
-
+  onAuthStateChange(
+    callback: (user: AppUser | null, session: Session | null) => void
+  ): () => void {
+    // Check initial active session
     this.getSession().then((session) => {
       if (session?.user) {
-        const appUser = mapSupabaseUserToAppUser(session.user);
-        setStoredGuestUser(appUser);
-        callback(appUser, session);
+        callback(mapSupabaseUserToAppUser(session.user), session);
+      } else {
+        callback(null, null);
       }
     });
 
@@ -313,12 +274,9 @@ class AuthService {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const appUser = mapSupabaseUserToAppUser(session.user);
-        setStoredGuestUser(appUser);
-        callback(appUser, session);
+        callback(mapSupabaseUserToAppUser(session.user), session);
       } else {
-        const currentUser = getStoredGuestUser() || DEFAULT_CLINICIAN;
-        callback(currentUser, null);
+        callback(null, null);
       }
     });
 
@@ -328,7 +286,7 @@ class AuthService {
   }
 
   /**
-   * Fetch User Profile from Supabase database
+   * Fetch User Profile from database
    */
   async getUserProfile(userId: string): Promise<UserProfile | null> {
     try {
@@ -338,59 +296,74 @@ class AuthService {
         .single();
 
       if (error) {
-        console.warn('Get user profile error:', error.message);
         return null;
       }
-
       return data as UserProfile;
     } catch (err) {
-      console.warn('Fetch profile exception:', err);
       return null;
     }
   }
 
   /**
-   * Update User Profile in Supabase database
+   * Update User Profile in database & auth metadata
    */
   async updateUserProfile(
     userId: string,
-    updates: Partial<Database['public']['Tables']['user_profiles']['Update']>
-  ): Promise<AuthResponse<UserProfile>> {
+    updates: {
+      displayName?: string;
+      role?: string;
+      institution?: string;
+      photoURL?: string;
+    }
+  ): Promise<AuthResponse<AppUser>> {
     try {
-      const { data, error } = await (supabase.from('user_profiles' as any) as any)
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', userId)
-        .select('*')
-        .single();
+      // 1. Update Supabase Auth user metadata
+      const { data: authData, error: authError } = await supabase.auth.updateUser({
+        data: {
+          full_name: updates.displayName,
+          display_name: updates.displayName,
+          role: updates.role,
+          institution: updates.institution,
+          avatar_url: updates.photoURL,
+        },
+      });
 
-      if (error) {
-        return { data: null, error: error.message, success: false };
+      if (authError) {
+        return { data: null, error: authError.message, success: false };
       }
 
-      return { data: data as UserProfile, error: null, success: true };
+      // 2. Sync to profiles / user_profiles table if accessible
+      try {
+        await (supabase.from('user_profiles' as any) as any).upsert({
+          id: userId,
+          display_name: updates.displayName,
+          photo_url: updates.photoURL,
+          role: updates.role,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (dbErr) {
+        console.warn('Profile table sync info:', dbErr);
+      }
+
+      const updatedAppUser = authData.user
+        ? mapSupabaseUserToAppUser(authData.user)
+        : null;
+
+      return {
+        data: updatedAppUser,
+        error: null,
+        success: true,
+      };
     } catch (err: any) {
-      return { data: null, error: err.message || 'Failed to update profile.', success: false };
+      return {
+        data: null,
+        error: err.message || 'Failed to update profile.',
+        success: false,
+      };
     }
-  }
-
-  /**
-   * Quick guest clinician login helper
-   */
-  loginAsGuestClinician(): AppUser {
-    setStoredGuestUser(DEFAULT_CLINICIAN);
-    return DEFAULT_CLINICIAN;
-  }
-
-  /**
-   * Explicitly set stored user session
-   */
-  setStoredGuestUser(user: AppUser | null): void {
-    setStoredGuestUser(user);
   }
 }
 
 export const authService = new AuthService();
+
 

@@ -1,16 +1,8 @@
 // src/lib/authService.ts
-import { authService, AppUser, DEFAULT_CLINICIAN, getStoredGuestUser, setStoredGuestUser } from '../services/auth.service.ts';
+import { authService, AppUser, AuthResponse } from '../services/auth.service.ts';
 
-export type { AppUser };
-export { DEFAULT_CLINICIAN, getStoredGuestUser, setStoredGuestUser };
-
-export async function loginWithGoogleOrFallback(): Promise<AppUser | null> {
-  const result = await authService.signInWithGoogle();
-  if (!result.success) {
-    console.warn('Fallback to local guest clinician');
-  }
-  return authService.getCurrentUser();
-}
+export type { AppUser, AuthResponse };
+export { authService };
 
 export async function logoutUser(): Promise<void> {
   await authService.signOut();
@@ -19,3 +11,4 @@ export async function logoutUser(): Promise<void> {
 export function subscribeToAuth(callback: (user: AppUser | null) => void): () => void {
   return authService.onAuthStateChange((user) => callback(user));
 }
+

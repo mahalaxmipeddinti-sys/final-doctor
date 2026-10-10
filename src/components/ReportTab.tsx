@@ -18,19 +18,34 @@ import {
   Award,
   FlaskConical,
   Activity,
+  Eye,
+  History,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
+import { generateDnaDoctorPDF } from '../services/pdfReportGenerator.ts';
+import { ReportModal } from './ReportModal.tsx';
+import { AppUser } from '../services/auth.service.ts';
+
 interface ReportTabProps {
   result: FullAnalysisResult;
+  currentUser?: AppUser | null;
+  onNavigateToTab?: (tab: string) => void;
+  onViewDetailedAnalysis?: () => void;
 }
 
-export const ReportTab: React.FC<ReportTabProps> = ({ result }) => {
+export const ReportTab: React.FC<ReportTabProps> = ({
+  result,
+  currentUser = null,
+  onNavigateToTab,
+  onViewDetailedAnalysis,
+}) => {
   const [copied, setCopied] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingImage, setIsExportingImage] = useState(false);
   const [reportFormat, setReportFormat] = useState<'visual' | 'markdown'>('visual');
+  const [showPdfPreviewModal, setShowPdfPreviewModal] = useState(false);
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
 
@@ -63,24 +78,27 @@ export const ReportTab: React.FC<ReportTabProps> = ({ result }) => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadPdf = async () => {
-    if (!reportContainerRef.current) return;
+  const handleDirectDownloadPdf = async () => {
     setIsExportingPdf(true);
     try {
-      const element = reportContainerRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#020617', // slate-950
+      const doc = await generateDnaDoctorPDF({
+        analysis: result,
+        user: currentUser,
       });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height],
-      });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`DNADoctor_Clinical_Report_${gene}_${result.analysisId}.pdf`);
+      const cleanGene = (gene || 'Variant').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `DNADoctor_Clinical_Report_${cleanGene}_${result.analysisId}.pdf`;
+
+      const blob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }, 800);
     } catch (err) {
       console.error('PDF export failed:', err);
     } finally {
@@ -118,53 +136,96 @@ export const ReportTab: React.FC<ReportTabProps> = ({ result }) => {
 
   return (
     <div className="space-y-6">
+      {/* Report Modal */}
+      <ReportModal
+        analysis={result}
+        currentUser={currentUser}
+        isOpen={showPdfPreviewModal}
+        onClose={() => setShowPdfPreviewModal(false)}
+      />
+
       {/* Action Toolbar */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-md">
         <div>
           <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
             <FileText className="h-4 w-4 text-teal-400" />
-            <span>Clinical Variant Interpretation Report</span>
+            <span>DNA Doctor • Clinical Variant PDF Report Generator</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Export auditable documentation via formatted PDF, high-resolution PNG image, or structured data.
+            Generate and download multi-page auditable reports with clinician photo watermark, ClinVar consensus, and 28-rules matrix.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Action 1: View Detailed Analysis */}
+          {onViewDetailedAnalysis && (
+            <button
+              onClick={onViewDetailedAnalysis}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+              title="View full interactive variant analysis and evidence synthesis"
+            >
+              <Eye className="h-3.5 w-3.5 text-teal-400" />
+              <span>View Detailed Analysis</span>
+            </button>
+          )}
+
+          {/* Action 2 & 3: Generate DNA Doctor Report / Preview PDF */}
+          <button
+            onClick={() => setShowPdfPreviewModal(true)}
+            className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center space-x-1.5 transition-all shadow-md shadow-teal-900/40"
+            title="Generate and preview multi-page DNA Doctor PDF report"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span>Generate / Preview Report</span>
+          </button>
+
+          {/* Action 4: Download PDF */}
+          <button
+            onClick={handleDirectDownloadPdf}
+            disabled={isExportingPdf}
+            className="px-3 py-1.5 rounded-lg bg-teal-950 hover:bg-teal-900 text-teal-300 border border-teal-800 text-xs font-semibold flex items-center space-x-1.5 transition-colors disabled:opacity-50"
+            title="Instant download multi-page PDF"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>{isExportingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
+          </button>
+
+          {/* Action 5: View Previous Reports / History */}
+          {onNavigateToTab && (
+            <button
+              onClick={() => onNavigateToTab('history')}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center space-x-1.5 transition-colors"
+              title="View previously generated reports and history"
+            >
+              <History className="h-3.5 w-3.5 text-amber-400" />
+              <span>View Previous Reports</span>
+            </button>
+          )}
+
           {/* Format Toggle */}
-          <div className="bg-slate-950 border border-slate-800 rounded-lg p-0.5 flex text-xs mr-2">
+          <div className="bg-slate-950 border border-slate-800 rounded-lg p-0.5 flex text-xs">
             <button
               onClick={() => setReportFormat('visual')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-2 py-1 rounded-md transition-colors ${
                 reportFormat === 'visual'
                   ? 'bg-teal-600 text-white font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Visual Sheet
+              Visual
             </button>
             <button
               onClick={() => setReportFormat('markdown')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-2 py-1 rounded-md transition-colors ${
                 reportFormat === 'markdown'
                   ? 'bg-teal-600 text-white font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Raw Text
+              Text
             </button>
           </div>
 
-          {/* Export PDF Button */}
-          <button
-            onClick={handleDownloadPdf}
-            disabled={isExportingPdf}
-            className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-500 disabled:bg-slate-800 text-white flex items-center gap-1.5 transition-all shadow-md shadow-teal-900/30"
-            title="Download formatted clinical report as PDF document"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>{isExportingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
-          </button>
 
           {/* Export Image Button */}
           <button

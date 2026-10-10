@@ -582,22 +582,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </div>
 
-      {/* Recent Analyses Quick Row */}
-      {recentAnalyses.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <History className="w-3.5 h-3.5 text-teal-400" />
-              <span>Recent Historical Analyses</span>
-            </h3>
+      {/* Recent Analyses Row & Empty State */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <History className="w-3.5 h-3.5 text-teal-400" />
+            <span>Recent Historical Analyses</span>
+          </h3>
+          {recentAnalyses.length > 0 && (
             <button
               onClick={() => onNavigateTab('history')}
               className="text-xs text-teal-400 hover:underline"
             >
               View all ({historyCount})
             </button>
-          </div>
+          )}
+        </div>
 
+        {recentAnalyses.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {recentAnalyses.slice(0, 3).map((item) => {
               const gene = item.normalizedVariant?.geneSymbol || item.clinvarRecord?.geneSymbol || 'Gene';
@@ -634,8 +636,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
               );
             })}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-xl p-6 text-center space-y-2.5">
+            <p className="text-xs text-slate-400">
+              No analyses yet. Start your first variant analysis to see results here.
+            </p>
+            <button
+              onClick={() => onNavigateTab('workbench')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/40 text-xs font-semibold transition-all"
+            >
+              <span>Launch Variant Analysis</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

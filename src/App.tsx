@@ -23,6 +23,8 @@ import { TrioPedigreeCard } from './components/TrioPedigreeCard.tsx';
 import { TrioInputSection } from './components/TrioInputSection.tsx';
 import { ClinicalAssayWorkbench } from './components/assays/ClinicalAssayWorkbench.tsx';
 import { authService, AppUser } from './services/auth.service.ts';
+import { AuthView } from './components/AuthView.tsx';
+import { ProfileSettingsView } from './components/ProfileSettingsView.tsx';
 import {
   Search,
   ArrowRight,
@@ -38,9 +40,8 @@ import {
   Sparkles,
   Users,
   Activity,
+  LogOut,
 } from 'lucide-react';
-
-import { LoginAccountView } from './components/LoginAccountView.tsx';
 
 interface StepItem {
   label: string;
@@ -50,7 +51,10 @@ interface StepItem {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [activeNavTab, setActiveNavTab] = useState<'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account'>('account');
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [activeNavTab, setActiveNavTab] = useState<
+    'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'profile' | 'settings' | 'account'
+  >('home');
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
@@ -106,16 +110,24 @@ export default function App() {
 
   // Initial data & auth session loading
   useEffect(() => {
-    refreshHistory();
     const unsubscribe = authService.onAuthStateChange((user) => {
       setCurrentUser(user);
+      setIsAuthLoading(false);
+      if (user) {
+        setActiveNavTab('home');
+        refreshHistory();
+      }
     });
     return () => unsubscribe();
   }, []);
 
   const refreshHistory = async () => {
     try {
-      const res = await fetch('/api/analyses');
+      const token = await authService.getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/analyses', { headers });
       if (res.ok) {
         const data: FullAnalysisResult[] = await res.json();
         setHistoryCount(data.length);
@@ -126,11 +138,17 @@ export default function App() {
     }
   };
 
+  const handleLogout = async () => {
+    await authService.signOut();
+    setCurrentUser(null);
+    setActiveNavTab('home');
+  };
+
   const runAnalysis = async (
     inputStr: string,
     chosenAssembly: GenomeAssembly,
     overrides: Record<string, any> = {},
-    targetTab: 'home' | 'matrix' | 'assays' = 'assays',
+    targetTab: 'home' | 'workbench' | 'matrix' | 'assays' = 'assays',
     trioInput?: {
       child: TrioMemberInput;
       mother: TrioMemberInput;
@@ -163,13 +181,17 @@ export default function App() {
         ]);
       }, 200);
 
+      const token = await authService.getAccessToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           input: inputStr,
           assembly: chosenAssembly,
-          userId: currentUser?.uid || 'local-session',
+          userId: currentUser?.uid || 'anonymous',
           userOverrides: overrides,
           trioInput,
         }),
@@ -279,6 +301,45 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // 1. Session restoration & initial loading splash
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center relative overflow-hidden font-sans">
+        <DnaBackgroundCanvas />
+        <div className="relative z-10 flex flex-col items-center space-y-4 p-8 rounded-3xl bg-slate-900/60 border border-slate-800 backdrop-blur-xl shadow-2xl">
+          <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-400 shadow-xl shadow-teal-950/50 animate-pulse">
+            <Dna className="w-10 h-10 text-teal-400" />
+          </div>
+          <div className="text-center space-y-1">
+            <h2 className="text-lg font-bold text-slate-100 tracking-tight flex items-center justify-center gap-1.5">
+              GenomeGuard <span className="text-teal-400 font-mono">AI</span>
+            </h2>
+            <p className="text-xs text-slate-400">Verifying secure clinical session...</p>
+          </div>
+          <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div className="w-full h-full bg-teal-500 animate-pulse rounded-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated state: Clean Login & Registration Experience
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased relative selection:bg-teal-500/30">
+        <DnaBackgroundCanvas />
+        <AuthView
+          onAuthSuccess={(user) => {
+            setCurrentUser(user);
+            setActiveNavTab('home');
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 3. Authenticated state: Full GenomeGuard AI Clinical Dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans antialiased selection:bg-teal-500/30 relative">
       {/* 3D Animated DNA Double Helix Background Canvas */}
@@ -301,6 +362,7 @@ export default function App() {
           setVariantInput(presetClinvarId);
           runAnalysis(presetClinvarId, assembly);
         }}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Viewport Area */}
@@ -322,6 +384,7 @@ export default function App() {
             }
           }}
           isSidebarCollapsed={isSidebarCollapsed}
+          onLogout={handleLogout}
         />
 
         <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -516,14 +579,14 @@ export default function App() {
                       <span>Test 9 Assays (2D/3D)</span>
                     </button>
 
-                    {/* Quick switch to report tab */}
+                    {/* Prominent Quick Report Button */}
                     <button
                       onClick={() => setResultTab('report')}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-1.5 transition-colors"
-                      title="View auditable clinical report"
+                      className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center space-x-1.5 transition-all shadow-md shadow-teal-900/50"
+                      title="Generate and download 10-page DNA Doctor PDF report"
                     >
-                      <FileText className="w-3.5 h-3.5 text-teal-400" />
-                      <span>Clinical Report</span>
+                      <FileText className="w-3.5 h-3.5 text-white" />
+                      <span>📄 Generate DNA Doctor Report (PDF)</span>
                     </button>
                   </div>
                 </div>
@@ -631,14 +694,17 @@ export default function App() {
 
                     <button
                       onClick={() => setResultTab('report')}
-                      className={`px-3 py-3 text-xs font-semibold flex items-center space-x-1.5 border-b-2 transition-all whitespace-nowrap ${
+                      className={`px-3 py-3 text-xs font-bold flex items-center space-x-1.5 border-b-2 transition-all whitespace-nowrap ${
                         resultTab === 'report'
-                          ? 'border-teal-400 text-teal-300'
-                          : 'border-transparent text-slate-400 hover:text-slate-200'
+                          ? 'border-teal-400 text-teal-300 bg-teal-950/40'
+                          : 'border-transparent text-teal-400 hover:text-teal-300 hover:bg-slate-800/60'
                       }`}
                     >
-                      <FileText className="h-3.5 w-3.5" />
-                      <span>Clinical Report &amp; Export</span>
+                      <FileText className="h-3.5 w-3.5 text-teal-400" />
+                      <span>DNA Doctor Report</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-500 text-slate-950 font-black ml-1">
+                        PDF
+                      </span>
                     </button>
                   </div>
 
@@ -685,7 +751,17 @@ export default function App() {
                       />
                     )}
 
-                    {resultTab === 'report' && <ReportTab result={activeResult} />}
+                    {resultTab === 'report' && (
+                      <ReportTab
+                        result={activeResult}
+                        currentUser={currentUser}
+                        onNavigateToTab={(tab) => {
+                          setActiveNavTab(tab as any);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        onViewDetailedAnalysis={() => setResultTab('details')}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -774,6 +850,7 @@ export default function App() {
         {/* NAV TAB 4: HISTORY (Cloud SQL PostgreSQL) */}
         {activeNavTab === 'history' && (
           <HistoryView
+            currentUser={currentUser}
             onLoadAnalysis={handleLoadFromHistory}
             onCompareAnalyses={(itemA, itemB) => {
               setCompareVariantA(itemA);
@@ -836,12 +913,16 @@ export default function App() {
           </div>
         )}
 
-        {/* NAV TAB 7: DETAILED USER LOGIN & ACCOUNT PORTAL */}
-        {activeNavTab === 'account' && (
-          <LoginAccountView
+        {/* NAV TAB 7: USER PROFILE & SETTINGS */}
+        {(activeNavTab === 'profile' || activeNavTab === 'settings' || activeNavTab === 'account') && (
+          <ProfileSettingsView
             currentUser={currentUser}
-            onUserChange={(user) => setCurrentUser(user)}
-            onSelectVariant={(variantInputStr) => runAnalysis(variantInputStr, assembly, {}, 'assays')}
+            onUserUpdate={(user) => setCurrentUser(user)}
+            onLogout={handleLogout}
+            onNavigateToTab={(tab) => {
+              setActiveNavTab(tab as any);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         )}
       </main>

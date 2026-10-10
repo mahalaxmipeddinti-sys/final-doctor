@@ -18,12 +18,13 @@ import {
   Sparkles,
   X,
   ExternalLink,
+  Settings,
 } from 'lucide-react';
-import { subscribeToAuth, loginWithGoogleOrFallback, logoutUser, AppUser } from '../lib/authService.ts';
+import { subscribeToAuth, logoutUser, AppUser } from '../lib/authService.ts';
 
 export interface SidebarProps {
-  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account';
-  setActiveTab: (tab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account') => void;
+  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'profile' | 'settings' | 'account';
+  setActiveTab: (tab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'profile' | 'settings' | 'account') => void;
   analysisCount?: number;
   onNewAnalysis?: () => void;
   isCollapsed: boolean;
@@ -31,6 +32,7 @@ export interface SidebarProps {
   isMobileOpen: boolean;
   setIsMobileOpen: (open: boolean) => void;
   onSelectBenchmark?: (clinvarId: string) => void;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -78,59 +80,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     {
       id: 'home' as const,
-      label: 'Home',
-      shortLabel: 'Home',
-      description: 'Search console & overview',
+      label: 'Overview',
+      shortLabel: 'Overview',
+      description: 'System overview & quick launch',
       icon: Home,
       badge: null,
     },
     {
+      id: 'workbench' as const,
+      label: 'Variant Analysis',
+      shortLabel: 'Analysis',
+      description: 'Clinical Tri-Pillar engine & Trio',
+      icon: Layers,
+      badge: null,
+    },
+    {
       id: 'assays' as const,
-      label: 'Assay Lab (2D/3D)',
-      shortLabel: 'Assays',
-      description: 'PCR, Sanger, NGS, CMA, Karyotype',
+      label: 'Genetic Testing Methods',
+      shortLabel: 'Methods',
+      description: 'Diagnostic Assay Lab (2D/3D simulations)',
       icon: Activity,
       badge: '2D/3D',
     },
     {
       id: 'matrix' as const,
-      label: 'ACMG 28-Rules',
-      shortLabel: 'ACMG',
-      description: 'Richards 2015 criteria auditor',
+      label: 'Evidence Explorer',
+      shortLabel: 'ACMG Matrix',
+      description: 'ACMG 28-Rules & Bayesian auditor',
       icon: ShieldCheck,
       badge: null,
     },
     {
-      id: 'compare' as const,
-      label: 'Compare Variants',
-      shortLabel: 'Compare',
-      description: 'Side-by-side run delta matrix',
-      icon: Scale,
-      badge: null,
-    },
-    {
       id: 'history' as const,
-      label: 'Audit History',
+      label: 'Analysis History',
       shortLabel: 'History',
-      description: 'Archive of analyzed variants',
+      description: 'Persistent database audit archive',
       icon: History,
       badge: analysisCount > 0 ? `${analysisCount}` : null,
     },
     {
-      id: 'methodology' as const,
-      label: 'Methodology',
-      shortLabel: 'Methods',
-      description: 'Rules & Bayes principles',
-      icon: BookOpen,
+      id: 'profile' as const,
+      label: 'Profile',
+      shortLabel: 'Profile',
+      description: 'Clinician identity & credentials',
+      icon: UserIcon,
       badge: null,
     },
     {
-      id: 'account' as const,
-      label: 'Account & Login',
-      shortLabel: 'Account',
-      description: 'Supabase session & user profile',
-      icon: UserIcon,
-      badge: user ? 'Active' : 'Sign In',
+      id: 'settings' as const,
+      label: 'Settings',
+      shortLabel: 'Settings',
+      description: 'Supabase connection & preferences',
+      icon: Settings,
+      badge: null,
     },
   ];
 
@@ -141,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: '12374', gene: 'TP53', label: 'R175H' },
   ];
 
-  const handleNavClick = (tabId: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account') => {
+  const handleNavClick = (tabId: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'profile' | 'settings' | 'account') => {
     setActiveTab(tabId);
     setIsMobileOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -322,32 +324,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-t border-slate-800/80 bg-slate-900/40 shrink-0 space-y-2.5">
         {(!collapsed || isMobile) ? (
           <>
-            {/* System Engine Health Card */}
-            <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2 text-[10px] space-y-1">
-              <div className="flex items-center justify-between text-slate-400 font-medium">
-                <span className="flex items-center gap-1.5">
-                  <Activity className="w-3 h-3 text-teal-400" />
-                  <span>Pipeline Engines</span>
-                </span>
-                <span className="text-emerald-400 font-mono font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  READY
-                </span>
-              </div>
-              <div className="text-[9px] text-slate-500 font-mono truncate">
-                ClinVar v2.0 • VEP v110 • ACMG
-              </div>
-            </div>
 
-            {/* User Session Bar */}
+
             {user ? (
-              <div className="flex items-center justify-between pt-0.5">
-                <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                <button
+                  onClick={() => handleNavClick('profile')}
+                  className="flex items-center gap-2 min-w-0 text-left hover:opacity-80 transition-opacity"
+                  title="View Profile"
+                >
                   {user.photoURL ? (
                     <img
                       src={user.photoURL}
                       alt="User avatar"
-                      className="w-6 h-6 rounded-full border border-slate-700 shrink-0"
+                      className="w-6 h-6 rounded-full border border-slate-700 shrink-0 object-cover"
                       referrerPolicy="no-referrer"
                     />
                   ) : (
@@ -358,10 +348,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span className="text-xs text-slate-300 truncate">
                     {user.displayName || user.email || 'Clinician'}
                   </span>
-                </div>
+                </button>
                 <button
                   onClick={handleLogout}
-                  className="text-xs text-slate-400 hover:text-red-400 p-1 transition-colors"
+                  className="text-xs text-slate-400 hover:text-rose-400 p-1 transition-colors"
                   title="Sign Out"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -369,11 +359,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ) : (
               <button
-                onClick={handleLogin}
+                onClick={() => handleNavClick('profile')}
                 className="w-full py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors flex items-center justify-center gap-1.5"
               >
                 <UserIcon className="w-3 h-3 text-teal-400" />
-                <span>Sign In with Google</span>
+                <span>Sign In / Register</span>
               </button>
             )}
           </>

@@ -11,26 +11,28 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { subscribeToAuth, logoutUser, AppUser } from '../lib/authService.ts';
-import { AuthModal } from './AuthModal.tsx';
 
 interface HeaderProps {
-  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account';
-  setActiveTab: (tab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'account') => void;
+  activeTab: 'home' | 'workbench' | 'matrix' | 'compare' | 'history' | 'methodology' | 'assays' | 'profile' | 'settings' | 'account';
+  setActiveTab: (tab: any) => void;
   analysisCount?: number;
   onNewAnalysis?: () => void;
   onToggleSidebar: () => void;
   isSidebarCollapsed?: boolean;
+  onLogout?: () => void;
 }
 
 const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
-  home: { title: 'Home', subtitle: 'Search & Overview' },
-  workbench: { title: 'Clinical Workbench', subtitle: 'Tri-Pillar Analysis' },
-  assays: { title: 'Diagnostic Assay Lab', subtitle: 'PCR, Sanger, NGS, CMA 2D/3D Simulations' },
-  matrix: { title: 'ACMG 28-Rules', subtitle: 'Richards 2015 Auditor' },
-  compare: { title: 'Compare Variants', subtitle: 'Differential Matrix' },
-  history: { title: 'Audit History', subtitle: 'Database Archive' },
-  methodology: { title: 'Methodology', subtitle: 'Guidelines & Bayes' },
-  account: { title: 'User Account Portal', subtitle: 'Supabase Authentication & Profile Settings' },
+  home: { title: 'Overview', subtitle: 'System Overview & Quick Launch' },
+  workbench: { title: 'Variant Analysis', subtitle: 'Tri-Pillar Clinical Pipeline & Trio Engine' },
+  assays: { title: 'Genetic Testing Methods', subtitle: 'Diagnostic Assay Lab (PCR, Sanger, NGS, CMA 2D/3D)' },
+  matrix: { title: 'Evidence Explorer', subtitle: 'ACMG 28-Rules & Bayesian Score Matrix' },
+  compare: { title: 'Compare Variants', subtitle: 'Side-by-Side Differential Matrix' },
+  history: { title: 'Analysis History', subtitle: 'Database Archive & Audit Trail' },
+  methodology: { title: 'Methodology', subtitle: 'ACMG Guidelines & Bayesian Framework' },
+  profile: { title: 'Clinician Profile', subtitle: 'Credentials & Affiliations' },
+  settings: { title: 'System Settings', subtitle: 'Supabase Database & API Configuration' },
+  account: { title: 'Account Settings', subtitle: 'Supabase Authentication & Preferences' },
 };
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,9 +42,9 @@ export const Header: React.FC<HeaderProps> = ({
   onNewAnalysis,
   onToggleSidebar,
   isSidebarCollapsed = false,
+  onLogout,
 }) => {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToAuth((currentUser) => {
@@ -54,6 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
   const handleLogout = async () => {
     await logoutUser();
     setUser(null);
+    if (onLogout) onLogout();
   };
 
   const currentInfo = TAB_TITLES[activeTab] || { title: 'Console', subtitle: '' };
@@ -122,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {user ? (
               <div
-                onClick={() => setActiveTab('account')}
+                onClick={() => setActiveTab('profile')}
                 className="flex items-center gap-2 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-1 cursor-pointer transition-colors"
                 title="View Profile & Credentials"
               >
@@ -140,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
                 <div className="hidden lg:flex flex-col text-left pr-1">
                   <span className="text-[11px] font-semibold text-slate-200 truncate max-w-[140px]">
-                    {user.displayName || 'Clinician'}
+                    {user.displayName || user.email?.split('@')[0] || 'Clinician'}
                   </span>
                   <span className="text-[9px] text-teal-400 font-mono">
                     {user.role || 'Clinical Geneticist'}
@@ -159,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             ) : (
               <button
-                onClick={() => setActiveTab('account')}
+                onClick={() => setActiveTab('profile')}
                 className="text-xs text-slate-200 hover:text-white px-3 py-1.5 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/40 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
@@ -170,12 +173,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={(loggedUser) => setUser(loggedUser)}
-      />
     </header>
   );
 };

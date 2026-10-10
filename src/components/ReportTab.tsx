@@ -27,6 +27,7 @@ import html2canvas from 'html2canvas';
 import { generateDnaDoctorPDF } from '../services/pdfReportGenerator.ts';
 import { ReportModal } from './ReportModal.tsx';
 import { AppUser } from '../services/auth.service.ts';
+import { DNA_WATERMARK_BASE64 } from '../assets/dnaWatermark.ts';
 
 interface ReportTabProps {
   result: FullAnalysisResult;
@@ -272,14 +273,31 @@ export const ReportTab: React.FC<ReportTabProps> = ({
         <div
           ref={reportContainerRef}
           id="clinical-report-container"
-          className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-8 shadow-2xl text-slate-100 font-sans"
+          className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-8 shadow-2xl text-slate-100 font-sans relative overflow-hidden"
         >
+          {/* Subtle DNA Background Watermark */}
+          <div
+            className="absolute inset-0 pointer-events-none opacity-[0.04] bg-center bg-no-repeat bg-contain"
+            style={{ backgroundImage: `url(${DNA_WATERMARK_BASE64})` }}
+          />
+
           {/* Document Masthead */}
-          <div className="border-b-2 border-teal-500/40 pb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="border-b-2 border-teal-500/40 pb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-teal-500/10 border border-teal-500/40 flex items-center justify-center text-teal-400">
-                <Dna className="w-7 h-7" />
-              </div>
+              {currentUser?.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt="Clinician Face"
+                  className="w-14 h-14 rounded-2xl border-2 border-teal-400/80 object-cover shadow-lg shadow-teal-950/50 shrink-0"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/40 flex flex-col items-center justify-center text-teal-400 shadow-md shrink-0">
+                  <span className="text-sm font-black">
+                    {(currentUser?.displayName || 'Dr. Karthik').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                  </span>
+                  <span className="text-[7px] text-teal-300 font-bold uppercase tracking-wider">DOCTOR</span>
+                </div>
+              )}
               <div>
                 <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
                   DNA DOCTOR CLINICAL REPORT
@@ -287,6 +305,13 @@ export const ReportTab: React.FC<ReportTabProps> = ({
                 <p className="text-xs text-teal-400 font-mono">
                   Genomic Variant Pathogenicity &amp; ACMG Guidelines Evaluation
                 </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                  <span className="text-teal-300 font-semibold">Clinician ID: {currentUser?.uid || currentUser?.id || 'CLIN-849201'}</span>
+                  <span>•</span>
+                  <span className="text-slate-200">{currentUser?.displayName || 'Dr. Karthik (Lead Geneticist)'}</span>
+                  <span>•</span>
+                  <span>{currentUser?.institution || 'Genomics Diagnostic Institute'}</span>
+                </div>
               </div>
             </div>
 

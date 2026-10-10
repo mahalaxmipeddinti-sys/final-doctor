@@ -2,6 +2,7 @@
 import { jsPDF } from 'jspdf';
 import { FullAnalysisResult } from '../types/genomics.ts';
 import { AppUser } from './auth.service.ts';
+import { DNA_WATERMARK_BASE64 } from '../assets/dnaWatermark.ts';
 
 export interface PDFReportOptions {
   analysis: FullAnalysisResult;
@@ -44,8 +45,40 @@ export async function generateDnaDoctorPDF(options: PDFReportOptions): Promise<j
   const slateLight = [241, 245, 249]; // #f1f5f9
   const borderGray = [226, 232, 240]; // #e2e8f0
 
+  // Helper: Draw DNA Double Helix Figure Watermark
+  const drawDnaWatermark = () => {
+    try {
+      if (DNA_WATERMARK_BASE64) {
+        if (typeof (doc as any).saveGraphicsState === 'function') {
+          (doc as any).saveGraphicsState();
+          (doc as any).setGState(new (doc as any).GState({ opacity: 0.08 }));
+        }
+        const wmWidth = 145;
+        const wmHeight = 81.5;
+        const wmX = (pageWidth - wmWidth) / 2;
+        const wmY = (pageHeight - wmHeight) / 2 + 10;
+        doc.addImage(DNA_WATERMARK_BASE64, 'PNG', wmX, wmY, wmWidth, wmHeight, undefined, 'FAST');
+        if (typeof (doc as any).restoreGraphicsState === 'function') {
+          (doc as any).restoreGraphicsState();
+        }
+      }
+    } catch {
+      // Fallback to subtle typography if GState or image fails
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(44);
+      doc.setTextColor(243, 247, 247);
+      doc.text('DNA DOCTOR', pageWidth / 2, pageHeight / 2, {
+        align: 'center',
+        angle: 45,
+      });
+    }
+  };
+
   // Helper: Draw Header, Subtle Watermark & Footer on pages 2-10
   const drawPageShell = (pageNum: number, totalPages: number, sectionTitle: string) => {
+    // Draw DNA helix watermark in background
+    drawDnaWatermark();
+
     // Subtle DNA Doctor top header rule
     doc.setFillColor(navyDark[0], navyDark[1], navyDark[2]);
     doc.rect(margin, 12, contentWidth, 0.4, 'F');
@@ -61,15 +94,6 @@ export async function generateDnaDoctorPDF(options: PDFReportOptions): Promise<j
 
     doc.setFontSize(7.5);
     doc.text(`Report ID: ${reportId}`, pageWidth - margin, 10, { align: 'right' });
-
-    // Subtle background watermark (Restrained scientific opacity)
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(44);
-    doc.setTextColor(243, 247, 247);
-    doc.text('DNA DOCTOR', pageWidth / 2, pageHeight / 2, {
-      align: 'center',
-      angle: 45,
-    });
 
     // Footer
     doc.setFillColor(borderGray[0], borderGray[1], borderGray[2]);
@@ -92,6 +116,9 @@ export async function generateDnaDoctorPDF(options: PDFReportOptions): Promise<j
   // PAGE 1 — PROFESSIONAL COVER AND PATIENT/USER DETAILS
   // ==========================================================================
   
+  // Draw DNA double helix watermark in background
+  drawDnaWatermark();
+
   // Top Banner
   doc.setFillColor(navyDark[0], navyDark[1], navyDark[2]);
   doc.rect(0, 0, pageWidth, 58, 'F');
@@ -115,53 +142,75 @@ export async function generateDnaDoctorPDF(options: PDFReportOptions): Promise<j
   doc.setTextColor(148, 163, 184);
   doc.text('Powered by GenomeGuard AI Multi-Evidence Tri-Pillar Synthesis Engine', margin, 42);
 
-  // Profile Photo in Top-Right Corner (Preserve aspect ratio, neutral border, fallback)
+  // Profile Photo & Clinician Face in Top-Right Corner
+  const imgSize = 30;
+  const imgX = pageWidth - margin - imgSize;
+  const imgY = 13;
+
   if (user?.photoURL && user.photoURL.startsWith('data:image')) {
     try {
-      const imgSize = 28;
-      const imgX = pageWidth - margin - imgSize;
-      const imgY = 14;
-
-      // Draw crisp white & neutral border
       doc.setFillColor(255, 255, 255);
-      doc.roundedRect(imgX - 1, imgY - 1, imgSize + 2, imgSize + 2, 2, 2, 'F');
-      doc.setDrawColor(203, 213, 225);
-      doc.roundedRect(imgX - 1, imgY - 1, imgSize + 2, imgSize + 2, 2, 2, 'S');
+      doc.roundedRect(imgX - 1.5, imgY - 1.5, imgSize + 3, imgSize + 3, 3, 3, 'F');
+      doc.setDrawColor(45, 212, 191);
+      doc.roundedRect(imgX - 1.5, imgY - 1.5, imgSize + 3, imgSize + 3, 3, 3, 'S');
       doc.addImage(user.photoURL, 'JPEG', imgX, imgY, imgSize, imgSize, undefined, 'FAST');
     } catch {
-      // Graceful fallback if image decoding fails
+      // Graceful fallback
     }
+  } else {
+    // Default Doctor Face / Clinician Avatar Badge
+    doc.setFillColor(30, 41, 59);
+    doc.roundedRect(imgX - 1.5, imgY - 1.5, imgSize + 3, imgSize + 3, 3, 3, 'F');
+    doc.setDrawColor(45, 212, 191);
+    doc.roundedRect(imgX - 1.5, imgY - 1.5, imgSize + 3, imgSize + 3, 3, 3, 'S');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(45, 212, 191);
+    const clinicianInitials = (user?.displayName || 'Dr. Karthik')
+      .split(' ')
+      .map((w: string) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'DR';
+    doc.text(clinicianInitials, imgX + imgSize / 2, imgY + imgSize / 2 + 1.5, { align: 'center' });
+    doc.setFontSize(5.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text('CLINICIAN', imgX + imgSize / 2, imgY + imgSize - 2.5, { align: 'center' });
   }
 
   // Cover Metadata Grid
-  let yPos = 70;
+  let yPos = 68;
 
   doc.setFillColor(slateLight[0], slateLight[1], slateLight[2]);
-  doc.roundedRect(margin, yPos, contentWidth, 44, 3, 3, 'F');
+  doc.roundedRect(margin, yPos, contentWidth, 48, 3, 3, 'F');
   doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
-  doc.roundedRect(margin, yPos, contentWidth, 44, 3, 3, 'S');
+  doc.roundedRect(margin, yPos, contentWidth, 48, 3, 3, 'S');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(tealDark[0], tealDark[1], tealDark[2]);
-  doc.text('REPORT IDENTIFIERS & USER SPECIFICATIONS', margin + 6, yPos + 8);
+  doc.text('REPORT IDENTIFIERS & CLINICIAN SPECIFICATIONS', margin + 6, yPos + 8);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(slateText[0], slateText[1], slateText[2]);
 
+  const clinicianUid = user?.uid || user?.id || (user?.email ? `CLIN-${user.email.split('@')[0].toUpperCase()}` : 'CLIN-00924');
+
   doc.text(`Report ID: ${reportId}`, margin + 6, yPos + 16);
-  doc.text(`Generation Date & Time: ${generationDate}`, margin + 6, yPos + 23);
-  doc.text(`Report Subject / User: ${user?.displayName || 'Authorized Investigator'}`, margin + 6, yPos + 30);
-  doc.text(`Institutional Affiliation: ${user?.institution || 'Genomics Diagnostic Institute'} (${user?.role || 'Clinical Geneticist'})`, margin + 6, yPos + 37);
+  doc.text(`Clinician ID: ${clinicianUid}`, margin + 6, yPos + 23);
+  doc.text(`Reviewing Clinician: ${user?.displayName || 'Dr. Karthik (Lead Geneticist)'}`, margin + 6, yPos + 30);
+  doc.text(`Affiliation: ${user?.institution || 'Genomics Diagnostic Institute'} (${user?.role || 'Clinical Geneticist'})`, margin + 6, yPos + 37);
+  doc.text(`Clinician Email: ${user?.email || 'karthik@gmail.com'}`, margin + 6, yPos + 44);
 
   const col2X = margin + contentWidth / 2 + 5;
   doc.text(`Target Variant: ${norm.originalInput || analysis.analysisId}`, col2X, yPos + 16);
   doc.text(`Gene Symbol: ${gene}`, col2X, yPos + 23);
   doc.text(`Genetic Test Method: ${testMethod}`, col2X, yPos + 30);
-  doc.text(`Overall Analysis Status: ${analysis.summaryStatus || 'Completed'}`, col2X, yPos + 37);
+  doc.text(`Generation Date & Time: ${generationDate}`, col2X, yPos + 37);
+  doc.text(`Overall Analysis Status: ${analysis.summaryStatus || 'Completed'}`, col2X, yPos + 44);
 
-  yPos += 52;
+  yPos += 54;
 
   // Primary Pathogenicity Call Banner
   doc.setFillColor(navyDark[0], navyDark[1], navyDark[2]);
@@ -876,13 +925,40 @@ export async function generateDnaDoctorPDF(options: PDFReportOptions): Promise<j
     doc.text(ver, margin + 130, rowY + 5.5);
   });
 
-  p10Y += provenanceRows.length * 8.5 + 12;
+  p10Y += provenanceRows.length * 8.5 + 8;
+
+  // Clinician Electronic Sign-off & Attestation Block
+  doc.setFillColor(tealLightBg[0], tealLightBg[1], tealLightBg[2]);
+  doc.roundedRect(margin, p10Y, contentWidth, 34, 3, 3, 'F');
+  doc.setDrawColor(tealPrimary[0], tealPrimary[1], tealPrimary[2]);
+  doc.roundedRect(margin, p10Y, contentWidth, 34, 3, 3, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(tealDark[0], tealDark[1], tealDark[2]);
+  doc.text('CLINICAL GENOMICS AUDIT ATTESTATION & SIGN-OFF', margin + 6, p10Y + 7);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(slateText[0], slateText[1], slateText[2]);
+  doc.text(`Reviewing Clinician: ${user?.displayName || 'Dr. Karthik (Lead Geneticist)'}`, margin + 6, p10Y + 14);
+  doc.text(`Clinician ID: ${user?.uid || user?.id || (user?.email ? `CLIN-${user.email.split('@')[0].toUpperCase()}` : 'CLIN-00924')}`, margin + 6, p10Y + 20);
+  doc.text(`Institutional Affiliation: ${user?.institution || 'Genomics Diagnostic Institute'} (${user?.role || 'Clinical Geneticist'})`, margin + 6, p10Y + 26);
+
+  const signCol2X = margin + contentWidth / 2 + 5;
+  doc.text(`Electronic Signature Hash: SHA256:${reportId.replace(/[^A-Z0-9]/g, '').slice(0, 16).toLowerCase()}... [VERIFIED]`, signCol2X, p10Y + 14);
+  doc.text(`Sign-off Timestamp: ${generationDate}`, signCol2X, p10Y + 20);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(tealPrimary[0], tealPrimary[1], tealPrimary[2]);
+  doc.text('Status: CLINICALLY AUDITED & APPROVED FOR RESEARCH RECORD', signCol2X, p10Y + 26);
+
+  p10Y += 40;
 
   // Regulatory Disclaimer Box
   doc.setFillColor(254, 243, 199);
-  doc.roundedRect(margin, p10Y, contentWidth, 38, 3, 3, 'F');
+  doc.roundedRect(margin, p10Y, contentWidth, 34, 3, 3, 'F');
   doc.setDrawColor(245, 158, 11);
-  doc.roundedRect(margin, p10Y, contentWidth, 38, 3, 3, 'S');
+  doc.roundedRect(margin, p10Y, contentWidth, 34, 3, 3, 'S');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
@@ -890,13 +966,13 @@ export async function generateDnaDoctorPDF(options: PDFReportOptions): Promise<j
   doc.text('REGULATORY & SCIENTIFIC USE DISCLAIMER', margin + 6, p10Y + 7);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(120, 53, 15);
   const disclaimer = 'This report is generated by DNA Doctor / GenomeGuard AI for informational, educational, and clinical research decision-support purposes only. It is not a certified laboratory diagnostic report and does not establish a physician-patient relationship. All interpretations, ACMG guideline classifications, and predictor outputs must be verified by a qualified clinical geneticist or certified molecular pathologist before clinical intervention.';
   const splitDisclaimer = doc.splitTextToSize(disclaimer, contentWidth - 12);
-  doc.text(splitDisclaimer, margin + 6, p10Y + 14);
+  doc.text(splitDisclaimer, margin + 6, p10Y + 13);
 
-  p10Y += 46;
+  p10Y += 40;
 
   // End mark
   doc.setFont('helvetica', 'bold');

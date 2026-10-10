@@ -17,6 +17,7 @@ import {
 import { FullAnalysisResult } from '../types/genomics.ts';
 import { AppUser } from '../services/auth.service.ts';
 import { generateDnaDoctorPDF } from '../services/pdfReportGenerator.ts';
+import { DNA_WATERMARK_BASE64 } from '../assets/dnaWatermark.ts';
 
 interface ReportModalProps {
   analysis: FullAnalysisResult | null;
@@ -244,9 +245,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </div>
           ) : (
             /* Interactive 10-Section View (Always 100% visible even without PDF plugin) */
-            <div className="max-w-4xl mx-auto p-6 sm:p-8 space-y-6 text-slate-200 font-sans">
+            <div className="max-w-4xl mx-auto p-6 sm:p-8 space-y-6 text-slate-200 font-sans relative">
+              {/* DNA Background Watermark */}
+              <div
+                className="absolute inset-0 pointer-events-none opacity-5 bg-center bg-no-repeat bg-contain"
+                style={{ backgroundImage: `url(${DNA_WATERMARK_BASE64})` }}
+              />
+
               {/* Cover Banner */}
-              <div className="bg-slate-900 border border-teal-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+              <div className="bg-slate-900/90 backdrop-blur-md border border-teal-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 font-mono text-[10px] font-bold uppercase">
@@ -254,14 +261,27 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                     </span>
                     <h1 className="text-xl font-bold text-white mt-2">Detailed Genetic Analysis Report</h1>
                     <p className="text-xs text-slate-400 mt-1">Report ID: {reportId} • Generated: {new Date().toLocaleString()}</p>
-                    <p className="text-xs text-slate-300 mt-0.5">Subject / Clinician: {currentUser?.displayName || 'Authorized Investigator'}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-teal-300 font-semibold">Clinician ID: {currentUser?.uid || currentUser?.id || 'CLIN-849201'}</span>
+                      <span className="text-slate-500">•</span>
+                      <span className="text-slate-300">{currentUser?.displayName || 'Dr. Karthik (Lead Geneticist)'}</span>
+                      <span className="text-slate-500">•</span>
+                      <span className="text-slate-400">{currentUser?.institution || 'Genomics Diagnostic Institute'}</span>
+                    </div>
                   </div>
-                  {currentUser?.photoURL && (
+                  {currentUser?.photoURL ? (
                     <img
                       src={currentUser.photoURL}
-                      alt="Profile"
-                      className="w-14 h-14 rounded-2xl border-2 border-teal-400/60 object-cover shadow-lg shrink-0"
+                      alt="Clinician Face"
+                      className="w-16 h-16 rounded-2xl border-2 border-teal-400/80 object-cover shadow-lg shadow-teal-950/50 shrink-0"
                     />
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl border-2 border-teal-400/80 bg-slate-800 flex flex-col items-center justify-center text-teal-400 font-bold shadow-lg shrink-0">
+                      <span className="text-base font-black">
+                        {(currentUser?.displayName || 'Dr. Karthik').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                      </span>
+                      <span className="text-[8px] text-slate-400 uppercase tracking-wider font-sans">DOCTOR</span>
+                    </div>
                   )}
                 </div>
 

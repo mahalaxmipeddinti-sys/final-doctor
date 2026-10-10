@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "glassy-magpie-2ct7q",
+    "npx firebase-tools use --add": "glassy-magpie-2ct7q"
+  },
+  "targets": {},
+  "etags": {}
+}

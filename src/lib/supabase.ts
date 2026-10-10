@@ -215,6 +215,9 @@ export interface Database {
 }
 
 // Supabase configuration with support for environment variables and dynamic overrides
+const DEFAULT_SUPABASE_URL = 'https://nvxuuradeoxznbhipaer.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_0rrORMBosLIL4q2u5Pc9Ew_VvU91jtt';
+
 export function getSupabaseConfig(): {
   url: string;
   anonKey: string;
@@ -228,8 +231,8 @@ export function getSupabaseConfig(): {
   const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.SUPABASE_URL) || '';
   const envKey = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_SUPABASE_ANON_KEY || import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY)) || (typeof process !== 'undefined' && (process.env?.VITE_SUPABASE_ANON_KEY || process.env?.SUPABASE_ANON_KEY || process.env?.SUPABASE_KEY)) || '';
 
-  const url = localUrl || envUrl || 'https://placeholder-project.supabase.co';
-  const anonKey = localKey || envKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder';
+  const url = localUrl || envUrl || DEFAULT_SUPABASE_URL;
+  const anonKey = localKey || envKey || DEFAULT_SUPABASE_ANON_KEY;
 
   const isCustom = Boolean(localUrl && localKey);
   const isPlaceholder = !url || url.includes('placeholder-project') || !anonKey || anonKey.includes('placeholder') || anonKey.includes('your-anon-key');

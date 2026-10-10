@@ -24,13 +24,13 @@ app.use(express.json({ limit: '15mb' }));
 const supabaseUrl =
   process.env.VITE_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  'https://placeholder-project.supabase.co';
+  'https://nvxuuradeoxznbhipaer.supabase.co';
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
-  'placeholder';
+  'sb_publishable_0rrORMBosLIL4q2u5Pc9Ew_VvU91jtt';
 
 export const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false },

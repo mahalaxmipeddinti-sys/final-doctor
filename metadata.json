@@ -1,0 +1,6 @@
+{
+  "name": "DNA Doctor",
+  "description": "Clinical-grade genomic variant pathogenicity predictor, ClinVar evidence aggregator, and ACMG guideline classifier.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
